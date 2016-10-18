@@ -27,6 +27,8 @@ Add-PSSnapin Microsoft.SharePoint.PowerShell -EA Stop
         Stop the SharePoint Search Services without pausing the Search Service Application(s).
     .PARAMETER SilentInstall
         Silently installs the patches without user input. Not specifying this parameter will cause each patch to prompt to install.
+    .PARAMETER Resume
+        Resumes and Starts the Search Service Application and Services. Default is true.
     .EXAMPLE
         Install-SPPatch -Path C:\Updates -Pause -SilentInstall
     .NOTES
@@ -53,17 +55,21 @@ Function Install-SPPatch
         $Stop,
         [switch]
         [Parameter(Mandatory=$false)]
-        $SilentInstall
+        $SilentInstall,
+        [switch]
+        [Parameter(Mandatory=$false)]
+        $Resume = $true
     )
 
-    $version = (Get-SPFarm).BuildVersion.Major
+    $version = (Get-SPFarm).BuildVersion.ToString()
+    $majorVersion = $version.Major
     $startTime = Get-Date
-
+    Write-Host -ForegroundColor Green "Current build: $version"
     ########################### 
     ##Ensure Patch is Present## 
     ###########################
 
-    if($version -eq '16')
+    if($majorVersion -eq '16')
     {
         $sts = Get-ChildItem -LiteralPath $Path | where{$_.Name -match 'sts([A-Za-z0-9\-]+).exe'}
         $wssloc = Get-ChildItem -LiteralPath $Path | where{$_.Name -match 'wssloc([A-Za-z0-9\-]+).exe'}
@@ -77,7 +83,7 @@ Function Install-SPPatch
         $patchfiles = $sts, $wssloc
         Write-Host -for Yellow "Installing $sts and $wssloc"
     }
-    elseif ($version -eq '15')
+    elseif ($majorVersion -eq '15')
     {
         $patchfiles = Get-ChildItem -LiteralPath $Path | ?{$_.Extension -eq ".exe"}
         
@@ -95,10 +101,10 @@ Function Install-SPPatch
     ######################## 
     ##Checking Search services## 
 
-    $oSearchSvc = Get-Service "OSearch$version" 
+    $oSearchSvc = Get-Service "OSearch$majorVersion" 
     $sPSearchHCSvc = Get-Service "SPSearchHostController"
 
-    If(($oSearchSvc.status -eq 'Running') -or ($sPSearchHCSvc.status-eq 'Running')) 
+    if(($oSearchSvc.status -eq 'Running') -or ($sPSearchHCSvc.status-eq 'Running')) 
     { 
         if($Pause) 
         { 
@@ -121,8 +127,8 @@ Function Install-SPPatch
 
     if($oSearchSvc.status -eq 'Running') 
     { 
-        Set-Service -Name "OSearch$version" -StartupType Disabled 
-        Stop-Service "OSearch$version" -WA 0
+        Set-Service -Name "OSearch$majorVersion" -StartupType Disabled 
+        Stop-Service "OSearch$majorVersion" -WA 0
     }
 
     if($sPSearchHCSvc.status -eq 'Running') 
@@ -206,19 +212,20 @@ Function Install-SPPatch
     Start-Service 'IISAdmin'
 
     ###Ensuring Search Services were stopped by script before Starting" 
-    if($Stop) 
+    if($Stop -and ($Resume)) 
     { 
-        Set-Service -Name "OSearch$version" -StartupType Automatic 
-        Start-Service "OSearch$version"
-    } 
-    if($Stop) 
-    { 
+        Set-Service -Name "OSearch$majorVersion" -StartupType Automatic 
+        Start-Service "OSearch$majorVersion"
         Set-Service 'SPSearchHostController' -StartupType Automatic 
         Start-Service 'SPSearchHostController'
     }
+    else 
+    {
+        Write-Host -ForegroundColor Red "Not starting Search Services as `$Resume` is set to false."
+    } 
 
     ###Resuming Search Service Application if paused### 
-    if($Pause) 
+    if($Pause -and ($Resume)) 
     { 
         $ssas = Get-SPEnterpriseSearchServiceApplication
 
@@ -229,6 +236,11 @@ Function Install-SPPatch
             $ssa.Resume() | Out-Null
         }
     }
+    else 
+    {
+        Write-Host -ForegroundColor Red "Not resuming Search Service Application as `$Resume` is set to false."        
+    }
+
     $endTime = Get-Date
     Write-Host -ForegroundColor Green 'Services are Started'
     Write-Host 
