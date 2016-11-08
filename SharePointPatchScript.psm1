@@ -6,8 +6,8 @@
     This script supports both SharePoint 2013 as well as SharePoint Server 2016. SharePoint Server 2016 supports both the
     sts*.exe and wssloc*.exe in the same directory.
  
-    Version: 1.0
-    Release Date: 10/06/2016
+    Version: 1.0.1
+    Release Date: 11/07/2016
     License: MIT (https://github.com/Nauplius/SharePoint-Patch-Script/blob/master/LICENSE)
  #>
 
