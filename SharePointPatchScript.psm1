@@ -61,7 +61,7 @@ Function Install-SPPatch
         $Resume = $true
     )
 
-    $version = (Get-SPFarm).BuildVersion.ToString()
+    $version = (Get-SPFarm).BuildVersion
     $majorVersion = $version.Major
     $startTime = Get-Date
     Write-Host -ForegroundColor Green "Current build: $version"
