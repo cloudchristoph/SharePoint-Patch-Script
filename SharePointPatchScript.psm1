@@ -33,12 +33,11 @@ Add-PSSnapin Microsoft.SharePoint.PowerShell -EA Stop
         Install-SPPatch -Path C:\Updates -Pause -SilentInstall
     .NOTES
         Author: Trevor Seward
-        Date: 10/14/2016
+        Date: 02/23/2017
         https://thesharepointfarm.com
         https://github.com/Nauplius
 
 #>
-
 Function Install-SPPatch
 {
     param
@@ -55,24 +54,22 @@ Function Install-SPPatch
         $Stop,
         [switch]
         [Parameter(Mandatory=$false)]
-        $SilentInstall,
-        [switch]
-        [Parameter(Mandatory=$false)]
-        $Resume = $true
+        $SilentInstall
     )
 
     $version = (Get-SPFarm).BuildVersion
     $majorVersion = $version.Major
     $startTime = Get-Date
     Write-Host -ForegroundColor Green "Current build: $version"
+
     ########################### 
     ##Ensure Patch is Present## 
     ###########################
 
     if($majorVersion -eq '16')
     {
-        $sts = Get-ChildItem -LiteralPath $Path | where{$_.Name -match 'sts([A-Za-z0-9\-]+).exe'}
-        $wssloc = Get-ChildItem -LiteralPath $Path | where{$_.Name -match 'wssloc([A-Za-z0-9\-]+).exe'}
+        $sts = Get-ChildItem -LiteralPath $Path | ?{$_.Name -match 'sts([A-Za-z0-9\-]+).exe'}
+        $wssloc = Get-ChildItem -LiteralPath $Path | ?{$_.Name -match 'wssloc([A-Za-z0-9\-]+).exe'}
 
         if($sts -eq $null -or $wssloc -eq $null)
         {
@@ -113,55 +110,60 @@ Function Install-SPPatch
             foreach($ssa in $ssas)
             {
                 Write-Host -ForegroundColor Yellow "Pausing the Search Service Application: $($ssa.DisplayName)"
-                Write-Host  -ForegroundColor Yellow  'This could take a few minutes...'
-                $ssa.Pause() | Out-Null
+                Write-Host  -ForegroundColor Yellow  '    This could take a few minutes...'
+                Suspend-SPEnterpriseSearchServiceApplication -Identity $ssa | Out-Null
             }
         }
         elseif($Stop) 
         { 
-            Write-Host 'Continuing without pausing the Search Service Application'
+            Write-Host -ForegroundColor Cyan '    Continuing without pausing the Search Service Application'
         }
     }
 
-    Write-Host -ForegroundColor Yellow 'Stopping Search Services if they are running'
-
-    if($oSearchSvc.status -eq 'Running') 
-    { 
-        Set-Service -Name "OSearch$majorVersion" -StartupType Disabled 
-        Stop-Service "OSearch$majorVersion" -WA 0
-    }
-
-    if($sPSearchHCSvc.status -eq 'Running') 
-    { 
-        Set-Service 'SPSearchHostController' -StartupType Disabled 
-        Stop-Service 'SPSearchHostController' -WA 0
-        $Stopped = 1
-    }
-
-    Write-Host -ForegroundColor Green 'Search Services are Stopped'
-    Write-Host
-
-    ####################### 
-    ##Stop Other Services## 
-    ####################### 
-    Set-Service -Name 'IISADMIN' -StartupType Disabled 
-    Set-Service -Name 'SPTimerV4' -StartupType Disabled
-
-    Write-Host -ForegroundColor Yellow 'Gracefully stopping IIS...'
-    Write-Host 
-    iisreset -stop -noforce 
-    Write-Host -ForegroundColor Yellow 'Stopping SPTimerV4'
-    Write-Host
-
-    $sPTimer = Get-Service 'SPTimerV4' 
-    if($sPTimer.Status -eq 'Running') 
+    #We don't need to stop SharePoint Services for 2016 and above
+    if($majorVersion -lt '16')
     {
-        Stop-Service 'SPTimerV4'
+
+        Write-Host -ForegroundColor Yellow 'Stopping Search Services if they are running'
+
+        if($oSearchSvc.status -eq 'Running') 
+        { 
+            Set-Service -Name "OSearch$majorVersion" -StartupType Disabled 
+            Stop-Service "OSearch$majorVersion" -WA 0
+        }
+
+        if($sPSearchHCSvc.status -eq 'Running') 
+        { 
+            Set-Service 'SPSearchHostController' -StartupType Disabled 
+            Stop-Service 'SPSearchHostController' -WA 0
+        }
+
+        Write-Host -ForegroundColor Green 'Search Services are Stopped'
+        Write-Host
+
+        ####################### 
+        ##Stop Other Services## 
+        ####################### 
+        Set-Service -Name 'IISADMIN' -StartupType Disabled 
+        Set-Service -Name 'SPTimerV4' -StartupType Disabled
+
+        Write-Host -ForegroundColor Green 'Gracefully stopping IIS...'
+        Write-Host 
+        iisreset -stop -noforce 
+        Write-Host -ForegroundColor Yellow 'Stopping SPTimerV4'
+        Write-Host
+
+        $sPTimer = Get-Service 'SPTimerV4' 
+        if($sPTimer.Status -eq 'Running') 
+        {
+            Stop-Service 'SPTimerV4'
+        }
+
+        Write-Host -ForegroundColor Green 'Services are Stopped'
+        Write-Host 
+        Write-Host
     }
 
-    Write-Host -ForegroundColor Green 'Services are Stopped'
-    Write-Host 
-    Write-Host
 
     ################## 
     ##Start patching## 
@@ -198,48 +200,43 @@ Function Install-SPPatch
     Write-Host -ForegroundColor Yellow ('Patch installation completed in {0:g}' -f ($patchEndTime - $patchStartTime))
     Write-Host
 
-    ################## 
-    ##Start Services## 
-    ################## 
-    Write-Host -ForegroundColor Yellow 'Starting Services'
-    Set-Service -Name 'SPTimerV4' -StartupType Automatic 
-    Set-Service -Name 'IISADMIN' -StartupType Automatic
-
-    ##Grabbing local server and starting services## 
-    $server = Get-SPServer $ENV:COMPUTERNAME
-
-    Start-Service 'SPTimerV4'
-    Start-Service 'IISAdmin'
-
-    ###Ensuring Search Services were stopped by script before Starting" 
-    if($Stop -and ($Resume)) 
-    { 
-        Set-Service -Name "OSearch$majorVersion" -StartupType Automatic 
-        Start-Service "OSearch$majorVersion"
-        Set-Service 'SPSearchHostController' -StartupType Automatic 
-        Start-Service 'SPSearchHostController'
-    }
-    else 
+    if($majorVersion -lt '16')
     {
-        Write-Host -ForegroundColor Red "Not starting Search Services as `$Resume` is set to false."
-    } 
+        ################## 
+        ##Start Services## 
+        ################## 
+        Write-Host -ForegroundColor Yellow 'Starting Services'
+        Set-Service -Name 'SPTimerV4' -StartupType Automatic 
+        Set-Service -Name 'IISADMIN' -StartupType Automatic
+
+        Start-Service 'SPTimerV4'
+        Start-Service 'IISAdmin'
+
+        ###Ensuring Search Services were stopped by script before Starting" 
+        if($Stop -or $Pause) 
+        { 
+            Set-Service -Name "OSearch$majorVersion" -StartupType Manual 
+            Start-Service "OSearch$majorVersion" -WA 0
+            Set-Service 'SPSearchHostController' -StartupType Automatic 
+            Start-Service 'SPSearchHostController' -WA 0
+        }
+    }
 
     ###Resuming Search Service Application if paused### 
-    if($Pause -and ($Resume)) 
+    if($Pause) 
     { 
         $ssas = Get-SPEnterpriseSearchServiceApplication
 
         foreach($ssa in $ssas)
         {
             Write-Host -ForegroundColor Yellow "Resuming the Search Service Application: $($ssa.DisplayName)"
-            Write-Host -ForegroundColor Yellow 'This could take a few minutes...'
-            $ssa.Resume() | Out-Null
+            Write-Host -ForegroundColor Yellow '    This could take a few minutes...'
+            Resume-SPEnterpriseSearchServiceApplication -Identity $ssa | Out-Null
         }
     }
-    else 
-    {
-        Write-Host -ForegroundColor Red "Not resuming Search Service Application as `$Resume` is set to false."        
-    }
+
+    ###Resuming IIS###
+    iisreset -start
 
     $endTime = Get-Date
     Write-Host -ForegroundColor Green 'Services are Started'
