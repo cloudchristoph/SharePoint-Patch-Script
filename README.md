@@ -24,7 +24,7 @@ Upcoming features include:
 * `-Path` is an absolute path to the folder location of the patches
 * `-SilentInstall` includes the arguments `/passive /quiet`. This prevents any of the patch UI from appearing (useful to patch as quickly as possible without user intervention)
 * `-Pause` pauses the Search Service Application(s) prior to stopping the Search Services.
-* `-Stop` simply stops the Search Services without pausing the Search Service Application.
+* `-Stop` simply stops the Search Services without pausing the Search Service Application (applies to SharePoint Server 2013 only).
 
 `-Pause` and `-Stop` are mutually exclusive.
 
