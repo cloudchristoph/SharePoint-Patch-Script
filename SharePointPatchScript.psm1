@@ -175,7 +175,7 @@ Function Install-SPPatch
 
     foreach($patchfile in $patchfiles)
     {
-        $filename = $patchfile.Basename
+        $filename = $patchfile.Fullname
 
         if($SilentInstall)
         {
