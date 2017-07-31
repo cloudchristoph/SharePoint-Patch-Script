@@ -82,7 +82,7 @@ Function Install-SPPatch
     }
     elseif ($majorVersion -eq '15')
     {
-        $patchfiles = Get-ChildItem -LiteralPath $Path | ?{$_.Extension -eq ".exe"}
+        $patchfiles = Get-ChildItem -LiteralPath $Path | ?{$_.Extension -eq "([A-Za-z0-9\-]+)2013-kb([A-Za-z0-9\-]+)glb.exe"}
         
         if($patchfiles -eq $null) 
         { 
